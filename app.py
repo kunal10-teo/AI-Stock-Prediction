@@ -6,7 +6,6 @@ import os
 import plotly.graph_objects as go
 
 from sklearn.preprocessing import MinMaxScaler
-from tensorflow.keras.models import load_model
 
 # =========================
 # PAGE CONFIG
@@ -212,16 +211,7 @@ if os.path.exists(MODEL_PATH):
     )
 
 
-    close_data = data[["Close"]].values
-
-
-    scaler = MinMaxScaler()
-
-
-    scaled = scaler.fit_transform(
-        close_data
-    )
-
+st.info("AI model prediction will be added after TensorFlow deployment.")
 
     last_60 = scaled[-60:]
 

@@ -1,14 +1,9 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-import pandas_ta as ta
 import numpy as np
 import os
 import plotly.graph_objects as go
-
-from tensorflow.keras.models import load_model
-from sklearn.preprocessing import MinMaxScaler
-
 
 # =========================
 # PAGE CONFIG

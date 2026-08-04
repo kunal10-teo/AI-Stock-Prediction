@@ -2,10 +2,8 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
-import os
 import plotly.graph_objects as go
 
-from sklearn.preprocessing import MinMaxScaler
 
 # =========================
 # PAGE CONFIG
@@ -31,7 +29,8 @@ stock = st.sidebar.selectbox(
         "RELIANCE.NS",
         "TCS.NS",
         "INFY.NS",
-        "HDFCBANK.NS"
+        "HDFCBANK.NS",
+        "AAPL"
     ]
 )
 
@@ -40,61 +39,93 @@ stock = st.sidebar.selectbox(
 # FETCH DATA
 # =========================
 
-data = yf.download(
-    stock,
-    period="1y",
-    auto_adjust=False
-)
+@st.cache_data
+def load_data(symbol):
+
+    data = yf.download(
+        symbol,
+        period="1y",
+        auto_adjust=False
+    )
+
+    if isinstance(data.columns, pd.MultiIndex):
+        data.columns = data.columns.get_level_values(0)
+
+    data.dropna(inplace=True)
+
+    return data
 
 
-if isinstance(data.columns, pd.MultiIndex):
-    data.columns = data.columns.get_level_values(0)
+data = load_data(stock)
 
 
-data.dropna(inplace=True)
-
-
+if data.empty:
+    st.error("No data found")
+    st.stop()
 
 
 # =========================
 # INDICATORS
 # =========================
 
+
 # DEMA
-ema1 = data["Close"].ewm(span=20, adjust=False).mean()
-ema2 = ema1.ewm(span=20, adjust=False).mean()
-data["DEMA"] = 2 * ema1 - ema2
 
-# Momentum
-data["Momentum"] = data["Close"].diff(10)
+ema1 = data["Close"].ewm(span=20).mean()
+ema2 = ema1.ewm(span=20).mean()
 
-# Bollinger Bands
-middle = data["Close"].rolling(20).mean()
-std = data["Close"].rolling(20).std()
+data["DEMA"] = (2 * ema1) - ema2
 
-data["BB_Upper"] = middle + (2 * std)
-data["BB_Lower"] = middle - (2 * std)
+
 
 # RSI
+
 delta = data["Close"].diff()
 
 gain = delta.clip(lower=0)
 loss = -delta.clip(upper=0)
 
+
 avg_gain = gain.rolling(14).mean()
 avg_loss = loss.rolling(14).mean()
 
+
 rs = avg_gain / avg_loss
 
-data["RSI"] = 100 - (100 / (1 + rs))
+data["RSI"] = 100 - (100/(1+rs))
+
+
+
+# Momentum
+
+data["Momentum"] = (
+    data["Close"] -
+    data["Close"].shift(10)
+)
+
+
+
+# Bollinger Bands
+
+middle = data["Close"].rolling(20).mean()
+
+std = data["Close"].rolling(20).std()
+
+
+data["BB_Upper"] = middle + (2*std)
+
+data["BB_Lower"] = middle - (2*std)
+
 
 data.dropna(inplace=True)
+
+
 
 # =========================
 # DATA TABLE
 # =========================
 
-st.subheader("📋 Recent Stock Data")
+st.subheader("📋 Stock Data")
 
 st.dataframe(
     data.tail()
@@ -103,10 +134,10 @@ st.dataframe(
 
 
 # =========================
-# PLOTLY CHART
+# CHART
 # =========================
 
-st.subheader("📈 Stock Analysis Chart")
+st.subheader("📈 Technical Analysis")
 
 
 fig = go.Figure()
@@ -134,7 +165,7 @@ fig.add_trace(
     go.Scatter(
         x=data.index,
         y=data["BB_Upper"],
-        name="BB Upper"
+        name="Upper Band"
     )
 )
 
@@ -143,7 +174,7 @@ fig.add_trace(
     go.Scatter(
         x=data.index,
         y=data["BB_Lower"],
-        name="BB Lower"
+        name="Lower Band"
     )
 )
 
@@ -151,7 +182,7 @@ fig.add_trace(
 
 fig.update_layout(
     height=500,
-    title="Price + Bollinger Bands + DEMA"
+    title="Stock Price + Indicators"
 )
 
 
@@ -163,7 +194,7 @@ st.plotly_chart(
 
 
 # =========================
-# RSI & MOMENTUM
+# RSI MOMENTUM
 # =========================
 
 
@@ -172,7 +203,7 @@ col1,col2 = st.columns(2)
 
 with col1:
 
-    st.subheader("📊 RSI")
+    st.subheader("RSI")
 
     st.line_chart(
         data["RSI"]
@@ -181,7 +212,7 @@ with col1:
 
 with col2:
 
-    st.subheader("⚡ Momentum")
+    st.subheader("Momentum")
 
     st.line_chart(
         data["Momentum"]
@@ -190,157 +221,63 @@ with col2:
 
 
 # =========================
-# AI PREDICTION
+# AI STYLE SIGNAL
 # =========================
 
-st.subheader("🤖 AI Prediction")
-
-
-MODEL_PATH = os.path.join(
-    os.getcwd(),
-    "models",
-    "real_lstm_model.keras"
+current_price = float(
+    data["Close"].iloc[-1]
 )
 
 
-
-if os.path.exists(MODEL_PATH):
-
-    model = load_model(
-        MODEL_PATH
-    )
+dema = float(
+    data["DEMA"].iloc[-1]
+)
 
 
-st.info("AI model prediction will be added after TensorFlow deployment.")
-
-    last_60 = scaled[-60:]
-
-
-    X_test = np.reshape(
-        last_60,
-        (1,60,1)
-    )
+rsi = float(
+    data["RSI"].iloc[-1]
+)
 
 
-    prediction = model.predict(
-        X_test
-    )
+if current_price > dema and rsi < 70:
+
+    signal = "BUY 🟢"
 
 
-    predicted_price = scaler.inverse_transform(
-        prediction
-    )
+elif current_price < dema:
 
-
-    current_price = float(
-        data["Close"].iloc[-1]
-    )
-
-
-    predicted = float(
-        predicted_price[0][0]
-    )
-
-
-
-    c1,c2,c3 = st.columns(3)
-
-
-
-    with c1:
-
-        st.metric(
-            "Current Price",
-            f"₹ {current_price:.2f}"
-        )
-
-
-    with c2:
-
-        st.metric(
-            "Predicted Price",
-            f"₹ {predicted:.2f}"
-        )
-
-
-    # =========================
-    # SIGNAL ENGINE
-    # =========================
-
-
-    rsi_value = float(
-        data["RSI"].iloc[-1]
-    )
-
-
-    momentum_value = float(
-        data["Momentum"].iloc[-1]
-    )
-
-
-
-    if (
-        predicted > current_price
-        and momentum_value > 0
-        and rsi_value < 70
-    ):
-
-        signal="BUY 🟢"
-
-
-    elif (
-        predicted < current_price
-        and momentum_value < 0
-        and rsi_value < 60
-    ):
-
-        signal="SELL 🔴"
-
-
-    else:
-
-        signal="HOLD 🟡"
-
-
-
-    with c3:
-
-        st.metric(
-            "Signal",
-            signal
-        )
-
-
-
-    # Confidence
-
-    confidence = min(
-        round(
-            (abs(predicted-current_price)/current_price)*100+70,
-            2
-        ),
-        95
-    )
-
-
-    st.success(
-        f"AI Trading Signal: {signal}"
-    )
-
-
-    st.info(
-        f"AI Confidence: {confidence}%"
-    )
+    signal = "SELL 🔴"
 
 
 else:
 
-    st.error(
-        "❌ Model Not Found"
+    signal = "HOLD 🟡"
+
+
+
+st.subheader("🤖 AI Trading Signal")
+
+
+c1,c2 = st.columns(2)
+
+
+with c1:
+
+    st.metric(
+        "Current Price",
+        f"₹ {current_price:.2f}"
+    )
+
+
+with c2:
+
+    st.metric(
+        "Signal",
+        signal
     )
 
 
 
 st.success(
-    "🚀 AI Dashboard Running Successfully"
+    "🚀 AI Stock Dashboard Running Successfully"
 )

@@ -4,6 +4,10 @@ import pandas as pd
 import numpy as np
 import os
 import plotly.graph_objects as go
+import pandas_ta as ta
+
+from sklearn.preprocessing import MinMaxScaler
+from tensorflow.keras.models import load_model
 
 # =========================
 # PAGE CONFIG
@@ -54,45 +58,34 @@ data.dropna(inplace=True)
 
 
 # =========================
-# INDICATORS
+# INDICATORS (Without pandas_ta)
 # =========================
 
-data["DEMA"] = ta.dema(
-    data["Close"],
-    length=20
-)
+# DEMA
+ema1 = data["Close"].ewm(span=20, adjust=False).mean()
+ema2 = ema1.ewm(span=20, adjust=False).mean()
+data["DEMA"] = 2 * ema1 - ema2
 
+# Momentum
+data["Momentum"] = data["Close"] - data["Close"].shift(10)
 
-data["Momentum"] = ta.mom(
-    data["Close"],
-    length=10
-)
+# Bollinger Bands
+rolling_mean = data["Close"].rolling(20).mean()
+rolling_std = data["Close"].rolling(20).std()
 
+data["BB_Upper"] = rolling_mean + (2 * rolling_std)
+data["BB_Lower"] = rolling_mean - (2 * rolling_std)
 
-bb = ta.bbands(
-    data["Close"],
-    length=20
-)
+# RSI
+delta = data["Close"].diff()
 
+gain = delta.where(delta > 0, 0).rolling(14).mean()
+loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
 
-if bb is not None:
-    data["BB_Upper"] = bb.iloc[:,0]
-    data["BB_Lower"] = bb.iloc[:,2]
-
-else:
-    data["BB_Upper"] = data["Close"]
-    data["BB_Lower"] = data["Close"]
-
-
-
-data["RSI"] = ta.rsi(
-    data["Close"],
-    length=14
-)
-
+rs = gain / loss
+data["RSI"] = 100 - (100 / (1 + rs))
 
 data.dropna(inplace=True)
-
 
 
 # =========================

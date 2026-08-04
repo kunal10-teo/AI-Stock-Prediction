@@ -4,7 +4,6 @@ import pandas as pd
 import numpy as np
 import os
 import plotly.graph_objects as go
-import pandas_ta as ta
 
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.models import load_model
@@ -57,8 +56,9 @@ data.dropna(inplace=True)
 
 
 
+
 # =========================
-# INDICATORS (Without pandas_ta)
+# INDICATORS
 # =========================
 
 # DEMA
@@ -67,26 +67,29 @@ ema2 = ema1.ewm(span=20, adjust=False).mean()
 data["DEMA"] = 2 * ema1 - ema2
 
 # Momentum
-data["Momentum"] = data["Close"] - data["Close"].shift(10)
+data["Momentum"] = data["Close"].diff(10)
 
 # Bollinger Bands
-rolling_mean = data["Close"].rolling(20).mean()
-rolling_std = data["Close"].rolling(20).std()
+middle = data["Close"].rolling(20).mean()
+std = data["Close"].rolling(20).std()
 
-data["BB_Upper"] = rolling_mean + (2 * rolling_std)
-data["BB_Lower"] = rolling_mean - (2 * rolling_std)
+data["BB_Upper"] = middle + (2 * std)
+data["BB_Lower"] = middle - (2 * std)
 
 # RSI
 delta = data["Close"].diff()
 
-gain = delta.where(delta > 0, 0).rolling(14).mean()
-loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
+gain = delta.clip(lower=0)
+loss = -delta.clip(upper=0)
 
-rs = gain / loss
+avg_gain = gain.rolling(14).mean()
+avg_loss = loss.rolling(14).mean()
+
+rs = avg_gain / avg_loss
+
 data["RSI"] = 100 - (100 / (1 + rs))
 
 data.dropna(inplace=True)
-
 
 # =========================
 # DATA TABLE
